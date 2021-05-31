@@ -46,7 +46,7 @@ class GAN:
 
         model = Sequential()
 
-        model.add(tf.keras.layers.Dense(10, input_shape=(self.dimensions,)))
+        model.add(tf.keras.layers.Dense(10, activation='relu', input_shape=(self.dimensions,)))
         model.add(tf.keras.layers.Dense(1, activation='sigmoid'))
 
         model.summary()
@@ -60,8 +60,8 @@ class GAN:
 
         model = Sequential()
 
-        model.add(tf.keras.layers.Dense(10, input_shape=(self.latent_dim,)))
-        model.add(tf.keras.layers.Dense(10))
+        model.add(tf.keras.layers.Dense(10, activation='relu', input_shape=(self.latent_dim,)))
+        # model.add(tf.keras.layers.Dense(10, activation='relu',))
         model.add(tf.keras.layers.Dense(2, activation='sigmoid'))
 
         model.summary()
@@ -136,4 +136,4 @@ class GAN:
 
 if __name__ == '__main__':
     gan = GAN()
-    gan.train(epochs=1000, batch_size=32, sample_interval=20)
+    gan.train(epochs=5000, batch_size=32, sample_interval=50)
