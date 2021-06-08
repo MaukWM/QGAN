@@ -68,13 +68,13 @@ class QGAN:
         circuit = QuantumCircuit(q, c)
 
         # Randomly initialize q3 and q4 for the generator
-        theta1 = np.random.rand(1)[0]
-        initial_vector1 = np.array([np.cos(theta1), np.sin(theta1)])
-        theta2 = np.random.rand(1)[0]
-        initial_vector2 = np.array([np.cos(theta2), np.sin(theta2)])
-
-        circuit.initialize(initial_vector1, 3)
-        circuit.initialize(initial_vector2, 4)
+        # theta1 = np.random.rand(1)[0]
+        # initial_vector1 = np.array([np.cos(theta1), np.sin(theta1)])
+        # theta2 = np.random.rand(1)[0]
+        # initial_vector2 = np.array([np.cos(theta2), np.sin(theta2)])
+        #
+        # circuit.initialize(initial_vector1, 3)
+        # circuit.initialize(initial_vector2, 4)
 
         circuit.h(q[0])
 
@@ -107,13 +107,13 @@ class QGAN:
         circuit = QuantumCircuit(q, c)
 
         # Randomly initialize q3 and q4 for the generator
-        theta1 = np.random.rand(1)[0]
-        initial_vector1 = np.array([np.cos(theta1), np.sin(theta1)])
-        theta2 = np.random.rand(1)[0]
-        initial_vector2 = np.array([np.cos(theta2), np.sin(theta2)])
-
-        circuit.initialize(initial_vector1, 0)
-        circuit.initialize(initial_vector2, 1)
+        # theta1 = np.random.rand(1)[0]
+        # initial_vector1 = np.array([np.cos(theta1), np.sin(theta1)])
+        # theta2 = np.random.rand(1)[0]
+        # initial_vector2 = np.array([np.cos(theta2), np.sin(theta2)])
+        #
+        # circuit.initialize(initial_vector1, 0)
+        # circuit.initialize(initial_vector2, 1)
 
         circuit.ry(self.g_thetas[0], q[0])
         circuit.ry(self.g_thetas[1], q[1])
@@ -147,29 +147,35 @@ class QGAN:
         return 0
 
     def real_cost(self, circuit):
-        result = self.run_simulation(circuit, 30)
-        if result == 0:
-            return 0, result
-        elif result == 1:
-            #TODO: fix this it's bad
-            return 1, result
-        else:
-            return np.log(result), result
+        runs = 30
+        result = self.run_simulation(circuit, runs)
+        result_prob = np.abs((result / runs - 0.5) / 0.5)
+
+        return np.log(result_prob), result
+
+        # if result == 0:
+        #     return 0, result
+        # elif result == 1:
+        #     #TODO: fix this it's bad
+        #     return 1, result
+        # else:
 
     def fake_cost(self, circuit):
-        result = self.run_simulation(circuit, 30)
-        if result == 0:
-            return 0, result
-        elif result == 1:
-            #TODO: fix this it's bad
-            return 1, result
-        else:
-            return np.log(1-result), result
+        runs = 30
+        result = self.run_simulation(circuit, runs)
+        result_prob = np.abs((result / runs - 0.5) / 0.5)
+        # if result == 0:
+        #     return 0, result
+        # elif result == 1:
+        #     #TODO: fix this it's bad
+        #     return 1, result
+        # else:
+        return np.log(1-result_prob), result
 
     def train(self):
         pass
 
 if __name__ == '__main__':
-    qgan = QGAN(epochs=100)
+    qgan = QGAN(epochs=10)
     qgan.train()
     qgan.plot_generator_distribution()
