@@ -16,7 +16,6 @@ class OneClusters:
 
         data = data[:n]
 
-
         return np.array(data)
 
 
@@ -41,9 +40,9 @@ class TwoClusters:
 
         return np.array(data)
 
-data = TwoClusters().generate(100).transpose()
-
-plt.scatter(data[0], data[1])
-plt.xlim([0, 1])
-plt.ylim([0, 1])
-plt.show()
+# data = TwoClusters().generate(100).transpose()
+#
+# plt.scatter(data[0], data[1])
+# plt.xlim([0, 1])
+# plt.ylim([0, 1])
+# plt.show()
