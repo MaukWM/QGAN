@@ -25,7 +25,9 @@ class QGAN:
 
         self.epochs = epochs
 
-        self.alpha = 0.1
+        self.alpha = 0.01
+
+        self.steps_per_epoch = 20
 
         # print(self.thetas)
 
@@ -130,6 +132,35 @@ class QGAN:
 
         return circuit
 
+    def build_discriminator_as_generator(self):
+        q = QuantumRegister(2)
+        c = ClassicalRegister(2)
+        circuit = QuantumCircuit(q, c)
+
+        # Randomly initialize q3 and q4 for the generator
+        # theta1 = np.random.rand(1)[0]
+        # initial_vector1 = np.array([np.cos(theta1), np.sin(theta1)])
+        # theta2 = np.random.rand(1)[0]
+        # initial_vector2 = np.array([np.cos(theta2), np.sin(theta2)])
+        #
+        # circuit.initialize(initial_vector1, 0)
+        # circuit.initialize(initial_vector2, 1)
+
+        circuit.ry(self.d_thetas[0], q[0])
+        circuit.ry(self.d_thetas[1], q[1])
+
+        circuit.ryy(self.d_thetas[2], q[0], q[1])
+
+        circuit.cry(self.d_thetas[3], q[0], q[1])
+
+        circuit.measure(q[0], c[0])
+        circuit.measure(q[1], c[1])
+
+        # plot = circuit.draw(output='mpl')
+        # plot.show()
+
+        return circuit
+
     @staticmethod
     def run_simulation(circuit, shot_count):
         backend = Aer.get_backend('qasm_simulator')
@@ -149,7 +180,10 @@ class QGAN:
     def real_cost(self, circuit):
         runs = 30
         result = self.run_simulation(circuit, runs)
-        result_prob = np.abs((result / runs - 0.5) / 0.5)
+        result_prob = np.abs(((result / runs) - 0.5) / 0.5)
+
+        if result_prob == 0:
+            result_prob = 0.1
 
         return np.log(result_prob), result
 
@@ -176,6 +210,6 @@ class QGAN:
         pass
 
 if __name__ == '__main__':
-    qgan = QGAN(epochs=10)
+    qgan = QGAN(epochs=100)
     qgan.train()
-    qgan.plot_generator_distribution()
+    # qgan.plot_generator_distribution()
