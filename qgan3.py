@@ -96,7 +96,7 @@ class QGAN2:
     def objective_function_generator(self, g_thetas):
         self.g_thetas = g_thetas
         cost = 0
-        for i in range(1):
+        for i in range(50):
             (gen_x, gen_y) = self.generate_point()
             d_circuit = self.build_discriminator(gen_x, gen_y)
             prob = self.run_simulation(d_circuit, 30)
@@ -113,14 +113,14 @@ class QGAN2:
     def objective_function_discriminator(self, d_thetas):
         self.d_thetas = d_thetas
         cost = 0
-        for i in range(1):
+        for i in range(25):
             (gen_x, gen_y) = self.generate_point()
             d_circuit = self.build_discriminator(gen_x, gen_y)
             prob = self.run_simulation(d_circuit, 30)
 
             cost += prob
 
-        idx = np.random.randint(len(self.data), size=1)
+        idx = np.random.randint(len(self.data), size=25)
         xs = self.data[idx]
 
         for x in xs:
@@ -131,11 +131,59 @@ class QGAN2:
 
         return cost
 
+    def shared_objective_function(self, parameters):
+        self.d_thetas = parameters[:len(parameters) // 2]
+        self.g_thetas = parameters[len(parameters) // 2:]
+
+        cost = 0
+
+        # Generator cost
+        for i in range(50):
+            (gen_x, gen_y) = self.generate_point()
+            d_circuit = self.build_discriminator(gen_x, gen_y)
+            prob = self.run_simulation(d_circuit, 30)
+
+            cost += (1 - prob)
+
+        # Dicriminator cost
+        for i in range(25):
+            (gen_x, gen_y) = self.generate_point()
+            d_circuit = self.build_discriminator(gen_x, gen_y)
+            prob = self.run_simulation(d_circuit, 30)
+
+            cost += prob
+
+        idx = np.random.randint(len(self.data), size=25)
+        xs = self.data[idx]
+
+        for x in xs:
+            d_circuit = self.build_discriminator(x[0], x[1])
+            prob = self.run_simulation(d_circuit, 30)
+
+            cost += (1 - prob)
+
+        self.plot_generator_distribution(0)
+        print(cost)
+
+        return cost
+
+    def shared_train(self):
+        optimizer = COBYLA(maxiter=100, tol=0.001)
+
+        opt_param = optimizer.optimize(num_vars=(len(self.d_thetas) + len(self.g_thetas)),
+                                       objective_function=self.shared_objective_function,
+                                       initial_point=np.concatenate((self.d_thetas, self.g_thetas), axis=None))
+
+        print("done", opt_param)
+
+        self.d_thetas = opt_param[0][:len(opt_param[0]) // 2]
+        self.g_thetas = opt_param[0][len(opt_param[0]) // 2:]
+
     def train(self):
         asd = 0
-        for i in range(200):
+        for i in range(25):
             asd += 1
-            optimizer = COBYLA(maxiter=5, tol=0.001)
+            optimizer = COBYLA(maxiter=10, tol=0.001)
 
             opt_param = optimizer.optimize(num_vars=len(self.d_thetas),
                                            objective_function=self.objective_function_discriminator,
@@ -154,8 +202,8 @@ class QGAN2:
 
             print(f"Epoch {i}, G_cost: {g_cost:.2f}, D_cost: {d_cost:.3f}")
 
-            if asd % 5 == 0:
-                self.plot_generator_distribution(i)
+            # if asd % 5 == 0:
+            self.plot_generator_distribution(i)
             #     self.generate_discriminator_heatmap()
 
     def generate_discriminator_heatmap(self):
@@ -251,5 +299,5 @@ if __name__ == '__main__':
     # qgan.build_generator().draw(output='mpl').show()
     # qgan.build_discriminator(0.5, 0.7).draw(output='mpl').show()
     # qgan.plot_generator_distribution()
-    qgan.train()
+    qgan.shared_train()
     # qgan.generate_discriminator_heatmap()
