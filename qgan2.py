@@ -1,3 +1,4 @@
+import copy
 import math
 
 import matplotlib.pyplot as plt
@@ -24,11 +25,19 @@ class QGAN2:
         self.d_thetas = np.random.random_sample((4,)) * math.pi
         self.g_thetas = np.random.random_sample((4,)) * math.pi
 
+        self.opt_d_thetas = copy.copy(self.d_thetas)
+        self.opt_g_thetas = copy.copy(self.g_thetas)
+        self.opt_h_dist = 1
+
         self.epochs = epochs
 
         self.alpha = 0.01
 
         self.steps_per_epoch = 20
+
+        self.resolution = 0.05
+
+        self.true_distribution = self.calculate_true_distribution()
 
         # print(self.thetas)
 
@@ -92,7 +101,66 @@ class QGAN2:
 
         return circuit
 
+    def calculate_true_distribution(self):
+        # Initialize values in order to calculate distribution
+        # Resolution must divide 1
+        xs = np.arange(0, 1, self.resolution)
+        ys = np.arange(0, 1, self.resolution)
+
+        total_data_points = len(self.data)
+
+        probabilities = np.zeros(shape=(int(1 / self.resolution), int(1 / self.resolution)))
+
+        #     print(data.shape)
+        #     print(data)
+
+        for x_i in range(len(xs)):
+            for y_i in range(len(ys)):
+                filtered_x = self.data[((self.resolution * (x_i + 1) > self.data[:, 0]) & (self.data[:, 0] > self.resolution * x_i))]
+                filtered_y = filtered_x[
+                    ((self.resolution * (y_i + 1) > filtered_x[:, 1]) & (filtered_x[:, 1] > self.resolution * y_i))]
+                probability = len(filtered_y) / total_data_points
+                probabilities[x_i][y_i] = probability
+
+        # Transpose the probabilities so that the results represent the data set.
+        probabilities = probabilities.T
+
+        return probabilities
+
+    def calculate_generated_distribution(self):
+        g_circuit = self.build_generator()
+        # Initialize values in order to calculate distribution
+        # Resolution must divide 1
+        xs = np.arange(0, 1, self.resolution)
+        ys = np.arange(0, 1, self.resolution)
+
+        total_data_points = 250
+
+        probabilities = np.zeros(shape=(int(1 / self.resolution), int(1 / self.resolution)))
+
+        def clamp(n, minn, maxn):
+            return max(min(maxn, n), minn)
+
+        for i in range(total_data_points):
+            x, y = self.generate_point()
+            probabilities[clamp(int(x / self.resolution), 0, (int(1/self.resolution) - 1))][clamp(int(y / self.resolution), 0, (int(1/self.resolution) - 1))] += 1 / total_data_points
+
+        # Transpose the probabilities so that the results represent the data set.
+        probabilities = probabilities.T
+
+        return probabilities
+
+    def calculate_hellinger_distance(self, true_distribution, generated_distribution):
+        result = 0
+
+        for x_i in range(len(true_distribution)):
+            for y_i in range(len(true_distribution[x_i])):
+                result += (math.sqrt(true_distribution[x_i][y_i]) - math.sqrt(generated_distribution[x_i][y_i])) ** 2
+
+        return (1 / math.sqrt(2)) * math.sqrt(result)
+
     def train(self):
+        opt_d_thetas, opt_g_thetas, opt_h_dist = self.d_thetas, self.g_thetas, 1
         # Train for e amount of epochs
 
         d_loss_on_real = []
@@ -174,13 +242,19 @@ class QGAN2:
                 g_total_cost += g_cost
             g_loss.append(g_total_cost)
 
+            h_dist = self.calculate_hellinger_distance(self.true_distribution, self.calculate_generated_distribution())
+
+            if h_dist < opt_h_dist:
+                self.opt_d_thetas, self.opt_g_thetas, self.opt_h_dist = copy.copy(self.d_thetas), copy.copy(self.g_thetas), copy.copy(h_dist)
+                print("Updating optimal g_thetas to:", opt_g_thetas)
+
             if asd % 5 == 0:
                 self.plot_generator_distribution(epoch=e)
-                self.generate_discriminator_heatmap()
+                # self.generate_discriminator_heatmap()
 
             accuracies.append(n_correct/(n_incorrect + n_correct))
 
-            print(f"Epoch: {e}, G_loss: {g_total_cost:.3f}, D_loss_real: {d_real_total_cost:.3f}, D_loss_gen: {d_generated_total_cost:.3F}, Accuracy: {n_correct/(n_incorrect + n_correct)}")
+            print(f"Epoch: {e}, G_loss: {g_total_cost:.3f}, D_loss_real: {d_real_total_cost:.3f}, D_loss_gen: {d_generated_total_cost:.3F}, Accuracy D: {n_correct / (n_incorrect + n_correct)}, Hellinger Distance: {h_dist:.3F}")
 
         # plt.ylim(0)
         print(d_loss_on_real)

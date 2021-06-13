@@ -17,6 +17,8 @@ class GAN:
 
         self.data_generator = OneClusters()
 
+        self.data = self.data_generator.generate(200)
+
         self.learning_rate = 0.0002
 
         optimizer = tf.keras.optimizers.Adam(self.learning_rate)
@@ -122,6 +124,8 @@ class GAN:
                 self.sample_data_points(epoch)
 
     def sample_data_points(self, epoch):
+        plt.scatter(*map(list, zip(*self.data)), color='red')
+
         data_point_amount = 100
         noise = np.random.normal(0, 1, (data_point_amount, self.latent_dim))
         generated_data_points = self.generator.predict(noise)

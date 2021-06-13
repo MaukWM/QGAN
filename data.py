@@ -25,7 +25,7 @@ class TwoClusters:
         pass
 
     def generate(self, n):
-        data = datasets.make_blobs(n_samples=n * 5, n_features=2, centers=[[0.25, 0.75], [0.75, 0.25]], cluster_std=[0.1, 0.005])
+        data = datasets.make_blobs(n_samples=n * 5, n_features=2, centers=[[0.25, 0.75], [0.75, 0.25]], cluster_std=[0.05, 0.05])
 
         data = [[el[0], el[1]] for el in data[0] if 0 < el[0] < 1 and 0 < el[1] < 1]
 

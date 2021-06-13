@@ -3,7 +3,7 @@ import math
 import matplotlib.pyplot as plt
 from qiskit.algorithms.optimizers import COBYLA
 
-from data import OneClusters
+from data import OneClusters, TwoClusters
 
 from qiskit import QuantumRegister, ClassicalRegister, QuantumCircuit, Aer, execute
 import numpy as np
@@ -96,7 +96,7 @@ class QGAN2:
     def objective_function_generator(self, g_thetas):
         self.g_thetas = g_thetas
         cost = 0
-        for i in range(50):
+        for i in range(26):
             (gen_x, gen_y) = self.generate_point()
             d_circuit = self.build_discriminator(gen_x, gen_y)
             prob = self.run_simulation(d_circuit, 30)
@@ -113,14 +113,14 @@ class QGAN2:
     def objective_function_discriminator(self, d_thetas):
         self.d_thetas = d_thetas
         cost = 0
-        for i in range(25):
+        for i in range(13):
             (gen_x, gen_y) = self.generate_point()
             d_circuit = self.build_discriminator(gen_x, gen_y)
             prob = self.run_simulation(d_circuit, 30)
 
             cost += prob
 
-        idx = np.random.randint(len(self.data), size=25)
+        idx = np.random.randint(len(self.data), size=13)
         xs = self.data[idx]
 
         for x in xs:
@@ -162,8 +162,8 @@ class QGAN2:
 
             cost += (1 - prob)
 
-        self.plot_generator_distribution(0)
-        print(cost)
+        # self.plot_generator_distribution(0)
+        # print(cost)
 
         return cost
 
@@ -197,9 +197,17 @@ class QGAN2:
                                            initial_point=self.g_thetas)
 
             self.g_thetas, g_cost, _ = opt_param
-
             # print("G", opt_param)
 
+            # # Add some shared training?
+            # opt_param = optimizer.optimize(num_vars=(len(self.d_thetas) + len(self.g_thetas)),
+            #                                objective_function=self.shared_objective_function,
+            #                                initial_point=np.concatenate((self.d_thetas, self.g_thetas), axis=None))
+            # self.d_thetas = opt_param[0][:len(opt_param[0]) // 2]
+            # self.g_thetas = opt_param[0][len(opt_param[0]) // 2:]
+
+            # print("G", opt_param)
+            # d_cost = 0
             print(f"Epoch {i}, G_cost: {g_cost:.2f}, D_cost: {d_cost:.3f}")
 
             # if asd % 5 == 0:
@@ -299,5 +307,5 @@ if __name__ == '__main__':
     # qgan.build_generator().draw(output='mpl').show()
     # qgan.build_discriminator(0.5, 0.7).draw(output='mpl').show()
     # qgan.plot_generator_distribution()
-    qgan.shared_train()
+    qgan.train()
     # qgan.generate_discriminator_heatmap()

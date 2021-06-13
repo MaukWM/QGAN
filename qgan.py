@@ -211,5 +211,6 @@ class QGAN:
 
 if __name__ == '__main__':
     qgan = QGAN(epochs=100)
-    qgan.train()
+    qgan.build_generator().draw(output='mpl').show()
+    # qgan.train()
     # qgan.plot_generator_distribution()
