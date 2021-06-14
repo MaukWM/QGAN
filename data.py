@@ -40,6 +40,56 @@ class TwoClusters:
 
         return np.array(data)
 
+
+class Distribution:
+
+    def __init__(self, n, type="random"):
+        self.n = 2 ** n
+        self.distribution_dict = {}
+
+        if type == "random":
+            self.distribution = self.generate_random()
+        elif type == "normal":
+            self.distribution = self.generate_normal()
+
+        for i in range(len(self.distribution)):
+            self.distribution_dict[str(i)] = self.distribution[i]
+
+    def generate_normal(self):
+        tot_samples = 2000
+        mu, sigma = self.n / 2, self.n / 8
+        samples = np.random.normal(mu, sigma, tot_samples)
+
+        distribution = np.zeros(self.n)
+
+        for x in samples:
+            if x > self.n - 1:
+                x = self.n - 1
+            if x < 0:
+                x = 0
+            distribution[int(x)] += 1 / tot_samples
+
+        return distribution
+
+    def generate_random(self):
+        probs = np.random.random_sample((self.n,)) ** 2
+        norm_fact = np.sum(probs)
+
+        norm_probs = probs/norm_fact
+
+        return norm_probs
+
+    def plot_distribution(self):
+        plt.bar(np.arange(len(self.distribution)), self.distribution)
+        plt.show()
+
+
+if __name__ == '__main__':
+    dist = Distribution(3, type="normal")
+    dist.plot_distribution()
+    print(dist.distribution)
+
+
 # data = TwoClusters().generate(100).transpose()
 #
 # plt.scatter(data[0], data[1])

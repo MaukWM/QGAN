@@ -31,7 +31,7 @@ class QGAN2:
 
         self.epochs = epochs
 
-        self.alpha = 0.01
+        self.alpha = 0.0025
 
         self.steps_per_epoch = 20
 
@@ -101,6 +101,26 @@ class QGAN2:
 
         return circuit
 
+    def build_opt_generator(self):
+        q = QuantumRegister(2)
+        c = ClassicalRegister(2)
+        circuit = QuantumCircuit(q, c)
+
+        circuit.ry(self.opt_g_thetas[0], q[0])
+        circuit.ry(self.opt_g_thetas[1], q[1])
+
+        circuit.ryy(self.opt_g_thetas[2], q[0], q[1])
+
+        circuit.cry(self.opt_g_thetas[3], q[0], q[1])
+
+        circuit.measure(q[0], c[0])
+        circuit.measure(q[1], c[1])
+
+        # plot = circuit.draw(output='mpl')
+        # plot.show()
+
+        return circuit
+
     def calculate_true_distribution(self):
         # Initialize values in order to calculate distribution
         # Resolution must divide 1
@@ -160,7 +180,6 @@ class QGAN2:
         return (1 / math.sqrt(2)) * math.sqrt(result)
 
     def train(self):
-        opt_d_thetas, opt_g_thetas, opt_h_dist = self.d_thetas, self.g_thetas, 1
         # Train for e amount of epochs
 
         d_loss_on_real = []
@@ -244,9 +263,9 @@ class QGAN2:
 
             h_dist = self.calculate_hellinger_distance(self.true_distribution, self.calculate_generated_distribution())
 
-            if h_dist < opt_h_dist:
+            if h_dist < self.opt_h_dist:
                 self.opt_d_thetas, self.opt_g_thetas, self.opt_h_dist = copy.copy(self.d_thetas), copy.copy(self.g_thetas), copy.copy(h_dist)
-                print("Updating optimal g_thetas to:", opt_g_thetas)
+                print("Updating optimal g_thetas to:", self.opt_g_thetas)
 
             if asd % 5 == 0:
                 self.plot_generator_distribution(epoch=e)
@@ -308,6 +327,23 @@ class QGAN2:
         # print(counts)
         return x, y
 
+    def generate_opt_point(self):
+        g_circuit = self.build_opt_generator()
+        shots = 30
+
+        backend = Aer.get_backend('qasm_simulator')
+        job = execute(backend=backend, experiments=g_circuit, shots=shots)
+        result = job.result()
+
+        counts = result.get_counts(g_circuit)
+        #counts = QGAN.run_simulation(g_circuit, 30)
+
+        (x, y) = self.counts_to_point(counts, shots)
+
+        # print(x, y)
+        # print(counts)
+        return x, y
+
     def plot_generator_distribution(self, epoch):
         # First plot the desired distribution
         plt.scatter(*map(list, zip(*self.data)), color='red')
@@ -316,6 +352,25 @@ class QGAN2:
         points = []
         for i in range(50):
             points.append(self.generate_point())
+        plt.scatter(*map(list, zip(*points)), color='blue')
+
+        # Plot disc points
+
+        plt.xlim([0, 1])
+        plt.ylim([0, 1])
+
+        plt.title("Epoch {}".format(epoch + 1))
+
+        plt.show()
+
+    def plot_generator_distribution(self, epoch):
+        # First plot the desired distribution
+        plt.scatter(*map(list, zip(*self.data)), color='red')
+
+        # Plot generated points
+        points = []
+        for i in range(50):
+            points.append(self.generate_opt_point())
         plt.scatter(*map(list, zip(*points)), color='blue')
 
         # Plot disc points

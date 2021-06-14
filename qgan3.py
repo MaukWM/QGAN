@@ -27,7 +27,7 @@ class QGAN2:
 
         self.epochs = epochs
 
-        self.alpha = 0.01
+        self.alpha = 0.005
 
         self.steps_per_epoch = 20
 
@@ -103,10 +103,10 @@ class QGAN2:
 
             # cost += abs(0.75 - gen_x) + abs(0.25 - gen_y)
 
-            cost += (1 - prob)
+            cost += (1 - prob) ** 2
 
-        # print(cost, g_thetas)
-        # self.plot_generator_distribution(1)
+        self.plot_generator_distribution(1)
+        print("G", cost, g_thetas)
 
         return cost
 
@@ -118,17 +118,19 @@ class QGAN2:
             d_circuit = self.build_discriminator(gen_x, gen_y)
             prob = self.run_simulation(d_circuit, 30)
 
-            cost += prob
+            cost += prob ** 2
 
-        idx = np.random.randint(len(self.data), size=13)
+        idx = np.random.randint(len(self.data), size=26)
         xs = self.data[idx]
 
         for x in xs:
             d_circuit = self.build_discriminator(x[0], x[1])
             prob = self.run_simulation(d_circuit, 30)
 
-            cost += (1 - prob)
+            cost += (1 - prob) ** 2
 
+        self.generate_discriminator_heatmap()
+        print("D", cost, d_thetas)
         return cost
 
     def shared_objective_function(self, parameters):
@@ -208,6 +210,7 @@ class QGAN2:
 
             # print("G", opt_param)
             # d_cost = 0
+            # g_cost = 0
             print(f"Epoch {i}, G_cost: {g_cost:.2f}, D_cost: {d_cost:.3f}")
 
             # if asd % 5 == 0:
@@ -226,6 +229,8 @@ class QGAN2:
                 prob = self.run_simulation(d_circuit, 30)
                 #TODO: Check heatmap, inverted probabilities?
                 heatmap[x_i][y_i] = prob
+
+        heatmap = heatmap.T
 
         plt.imshow(heatmap)
         plt.colorbar()
@@ -309,3 +314,5 @@ if __name__ == '__main__':
     # qgan.plot_generator_distribution()
     qgan.train()
     # qgan.generate_discriminator_heatmap()
+
+    # Below is to only optimize the Generator
