@@ -108,6 +108,7 @@ class GAN:
             d_loss_fake = self.discriminator.train_on_batch(generated_data_points, fake)
             d_loss = 0.5 * np.add(d_loss_real, d_loss_fake)
 
+            print(generated_data_points)
             # Train Generator
 
             # Generate new noise for the Generator

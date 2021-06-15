@@ -1,3 +1,5 @@
+from random import randrange
+
 import numpy as np
 from sklearn import datasets
 from sklearn import preprocessing
@@ -51,9 +53,17 @@ class Distribution:
             self.distribution = self.generate_random()
         elif type == "normal":
             self.distribution = self.generate_normal()
+        elif type == "single_valued":
+            self.distribution = self.generate_single_valued()
 
         for i in range(len(self.distribution)):
             self.distribution_dict[str(i)] = self.distribution[i]
+
+    def generate_single_valued(self):
+        distribution = np.zeros(self.n)
+        distribution[randrange(0, self.n - 1)] = 1
+
+        return distribution
 
     def generate_normal(self):
         tot_samples = 2000

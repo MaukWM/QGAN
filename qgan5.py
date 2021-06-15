@@ -10,6 +10,11 @@ import numpy as np
 
 from data import Distribution
 
+import tensorflow as tf
+from matplotlib import pyplot as plt
+from tensorflow.python.keras import Sequential, Input
+from tensorflow.python.keras.models import Model
+
 def derivative(f, theta, epoch):
     return 0.5 * (f * (theta + math.pi / (2 * math.sqrt(epoch + 1))) - f * (theta - math.pi / (2 * math.sqrt(epoch + 1))))
 
@@ -21,49 +26,30 @@ class QGAN4:
     def __init__(self, num_of_dimensions, epochs=20):
         self.epochs = epochs
         self.steps_per_epoch = 10
-        self.alpha = 0.0025
+        self.alpha = 0.005
+
+        self.disc_batch_size = 64
+        self.disc_learning_rate = 0.0015
+
+        optimizer = tf.keras.optimizers.Adam(self.disc_learning_rate)
+
+        # Build and compile the discriminator
+        self.discriminator = self.build_discriminator()
+        self.discriminator.compile(loss='binary_crossentropy', optimizer=optimizer, metrics=['accuracy'])
 
         self.num_of_dimensions = num_of_dimensions
-        self.g_layers = 5
-        self.d_layers = 5
+        self.g_layers = 2
+        self.d_layers = 1
 
         # self.g_thetas_j = np.random.random_sample((g_n_qubits + self.k * g_n_qubits,)) * math.pi
         self.g_thetas = np.random.random_sample((self.g_layers + 1, self.num_of_dimensions)) * math.pi
         self.d_thetas = np.random.random_sample((self.d_layers + 1, self.num_of_dimensions)) * math.pi
 
-        self.distribution_generator = Distribution(self.num_of_dimensions, type="normal")
+        self.distribution_generator = Distribution(self.num_of_dimensions, type="single_valued")
         self.distribution = self.distribution_generator.distribution
         self.distribution_dict = self.distribution_generator.distribution_dict
 
-        self.data = np.random.choice(2 ** self.num_of_dimensions, 2000, p=self.distribution)
-
-    # def build_generator_j(self):
-    #     q = QuantumRegister(self.g_n_qubits)
-    #     c = ClassicalRegister(self.g_n_qubits)
-    #     circuit = QuantumCircuit(q, c)
-    #
-    #     j = 0
-    #
-    #     # Kelbi method of 2D Array?
-    #     for i in range(j, j + self.g_n_qubits):
-    #         circuit.ry(self.g_thetas_j[i], q[i])
-    #     j += self.g_n_qubits
-    #
-    #     for iter in range(self.k):
-    #         circuit.cz(q[1:], q[:-1])
-    #         circuit.cz(q[0], q[-1])
-    #
-    #         for i in range(j, j + self.g_n_qubits):
-    #             circuit.ry(self.g_thetas_j[j+i], q[i])
-    #         j += self.g_n_qubits
-    #         circuit.barrier()
-    #
-    #     circuit.measure(q[:], c[:])
-    #
-    #     plot = circuit.draw(output='mpl')
-    #     plot.show()
-    #
-    #     return circuit
+        self.data = np.random.choice(2 ** self.num_of_dimensions, 2000, p=self.distribution) / self.distribution_generator.n
 
     def build_generator(self):
         q = QuantumRegister(self.num_of_dimensions)
@@ -90,38 +76,18 @@ class QGAN4:
 
         return circuit
 
-    def build_discriminator(self, array):
-        q = QuantumRegister(self.num_of_dimensions+1)
-        c = ClassicalRegister(1)
-        circuit = QuantumCircuit(q, c)
+    def build_discriminator(self):
+        model = Sequential()
 
-        while len(array) != 3:
-            array.insert(0, 0)
+        model.add(tf.keras.layers.Dense(128, activation='relu', input_shape=(1,)))
+        model.add(tf.keras.layers.Dense(1, activation='sigmoid'))
 
-        for i in range(self.num_of_dimensions):
-            circuit.initialize((1-array[i], array[i]), q[i])
-            circuit.ry(self.g_thetas[0][i], q[i])
+        model.summary()
 
-        circuit.barrier()
+        disc_input = Input(1)
+        disc_output = model(disc_input)
 
-        for iter in range(self.d_layers):
-            circuit.cz(q[1:-1], q[:-2])
-            circuit.cz(q[0], q[-2])
-            circuit.barrier()
-            for i in range(self.num_of_dimensions):
-                circuit.ry(self.g_thetas[iter+1][i], q[i])
-            circuit.barrier()
-
-        circuit.h(q[self.num_of_dimensions])
-        circuit.cnot(q[self.num_of_dimensions], q[:-1])
-        circuit.h(q[self.num_of_dimensions])
-
-        circuit.measure(q[self.num_of_dimensions], c[0])
-
-        # plot = circuit.draw(output='mpl')
-        # plot.show()
-
-        return circuit
+        return Model(disc_input, disc_output)
 
     def generate_point(self):
         g_circuit = self.build_generator()
@@ -130,13 +96,6 @@ class QGAN4:
         job = execute(backend=backend, experiments=g_circuit, shots=1)
         counts = job.result().get_counts()
 
-        return counts
-
-    @staticmethod
-    def get_discriminator_judgement(d_circuit):
-        backend = Aer.get_backend('qasm_simulator')
-        job = execute(backend=backend, experiments=d_circuit, shots=1)
-        counts = job.result().get_counts()
         return counts
 
     def get_generator_distribution(self):
@@ -188,7 +147,13 @@ class QGAN4:
         plt.bar(np.arange(len(dist_arr)), dist_arr)
         plt.show()
 
-    def plot_real_and_generated_distribution(self, e=-1):
+    def get_discriminator_distribution(self):
+        dist = np.zeros(self.distribution_generator.n)
+        for i in range(self.distribution_generator.n):
+            dist[i] = (self.discriminator.predict([i / self.distribution_generator.n]) - 0.5)
+        return dist / np.linalg.norm(dist)
+
+    def plot_real_and_generated_distribution(self, e=-1, plot_disc_dist=False):
         gen_dist = self.get_generator_distribution()
         gen_dist_arr = np.zeros(2 ** self.num_of_dimensions)
 
@@ -198,6 +163,10 @@ class QGAN4:
         #plt.plot(np.arange(len(gen_dist_arr)), gen_dist_arr, label='Generated', color='orange')
         plt.bar(np.arange(len(self.distribution)), self.distribution, label='Real', color='blue', width=0.5)
         plt.bar(np.arange(len(gen_dist_arr)), gen_dist_arr, label='Fake', color='red', width=0.2)
+
+        if plot_disc_dist:
+            disc_dist = self.get_discriminator_distribution()
+            plt.bar(np.arange(len(gen_dist_arr)), disc_dist, label='Disc_probs', color='green', width=0.1)
 
         plt.xlabel("x")
         plt.ylabel("p(x)")
@@ -214,6 +183,24 @@ class QGAN4:
     def bitfield(n):
         return [int(digit) for digit in bin(n)[2:]]
 
+    def objective_function_generator(self, g_thetas):
+        self.g_thetas = g_thetas.reshape((self.g_thetas.shape[0], self.g_thetas.shape[1]))
+        cost = 0
+        for i in range(13):
+            generated_sample = int(list(self.generate_point().keys())[0], 2)
+            # generated_sample = generated_sample / self.distribution_generator.n
+            d_prediction = self.discriminator.predict([generated_sample])
+
+            # cost += abs(0.75 - gen_x) + abs(0.25 - gen_y)
+
+            if d_prediction < 0.5:
+                cost += 1
+            # if generated_sample != 0:
+            #     cost += 1
+            # cost += ((1 - d_prediction) * 2) ** 2
+
+        return cost
+
     def train(self):
         d_loss_on_real = []
         d_loss_on_generated = []
@@ -221,95 +208,91 @@ class QGAN4:
         accuracies = []
         h_dists = []
 
+        # Adversarial ground truths
+        valid = np.ones((self.disc_batch_size, 1))
+        fake = np.zeros((self.disc_batch_size, 1))
+
         asd = 0
 
         for e in range(self.epochs):
             d_real_total_cost = 0
             n_correct = 0
             n_incorrect = 0
+
             # First train the Discriminator on real data
-            idx = np.random.randint(len(self.data), size=self.steps_per_epoch)
-            xs = self.data[idx]
-            for x in xs:
-                d_circuit = self.build_discriminator(QGAN4.bitfield(x))
-                d_prediction = int(list(QGAN4.get_discriminator_judgement(d_circuit).keys())[0])
+            # Select a random batch of real data points
+            idx = np.random.randint(0, self.data.shape[0], self.disc_batch_size)
+            real_data_points = self.data[idx]
 
-                d_cost = 1 - d_prediction
+            generated_data_points = []
+            for i in range(self.disc_batch_size):
+                generated_data_points.append(int(list(self.generate_point().keys())[0], 2) / self.distribution_generator.n)
+            generated_data_points = np.stack(generated_data_points)
 
-                # print('real', d_cost)
-                grad = derivatives(d_cost, self.d_thetas, e)
-                # print(grad)
+            # Train the discriminator
+            for i in range(20):
+                d_loss_real = self.discriminator.train_on_batch(real_data_points, valid)
+                d_loss_fake = self.discriminator.train_on_batch(generated_data_points, fake)
+                d_loss = 0.5 * np.add(d_loss_real, d_loss_fake)
 
-                if d_prediction > 0.5:
-                    n_correct += 1
-                else:
-                    n_incorrect += 1
-
-                # Update the thetas
-                self.d_thetas -= self.alpha * grad
-
-                d_real_total_cost += d_cost
-
-            d_loss_on_real.append(d_real_total_cost)
-
-            d_generated_total_cost = 0
-            # Then train the Discriminator on generated data
-            for i in range(self.steps_per_epoch):
-                gen = self.generate_point()
-                # Convert binary string to list of binary digits
-                bin_gen = []
-                for bin in list(gen.keys())[0]:
-                    bin_gen.append(int(bin))
-
-                d_circuit = self.build_discriminator(bin_gen)
-                d_prediction = int(list(QGAN4.get_discriminator_judgement(d_circuit).keys())[0])
-
-                d_cost = d_prediction
-
-                grad = derivatives(d_cost, self.d_thetas, e)
-
-                if d_prediction < 0.5:
-                    n_correct += 1
-                else:
-                    n_incorrect += 1
-
-                # Update the thetas
-                self.d_thetas -= self.alpha * grad
-
-                d_generated_total_cost += d_cost
-
-            d_loss_on_generated.append(d_generated_total_cost)
+                d_loss_on_real.append(d_loss_real)
+                d_loss_on_generated.append(d_loss_fake)
 
             g_total_cost = 0
+
+            g_dist = self.get_generator_distribution()
+
+            # print(g_dist)
+            # Get probs from discriminator 0 through 7
+            # apply loss function in discord
+
             # # Finally train the Generator on the Discriminator
-            for i in range(self.steps_per_epoch):
-                gen = self.generate_point()
-                # Convert binary string to list of binary digits
-                bin_gen = []
-                for bin in list(gen.keys())[0]:
-                    bin_gen.append(int(bin))
+            # for i in range(self.steps_per_epoch):
+            #     # Convert binary string to list of binary digits
+            #     generated_sample = int(list(self.generate_point().keys())[0], 2)
+            #     d_prediction = self.discriminator.predict([generated_sample])
+            #
+            #     g_cost = -(1 - d_prediction)
+            #
+            #     g_total_cost += g_cost
+            #
+            # grad = derivatives(g_total_cost, self.g_thetas, e)
+            #
+            # # Update the thetas
+            # self.g_thetas -= self.alpha * grad
+            #
+            # g_loss.append(g_total_cost)
 
-                d_circuit = self.build_discriminator(bin_gen)
-                d_prediction = int(list(QGAN4.get_discriminator_judgement(d_circuit).keys())[0])
+            optimizer = COBYLA(maxiter=10, tol=0.001)
 
-                g_cost = -(1 - d_prediction)
-                grad = derivatives(g_cost, self.g_thetas, e)
+            opt_param = optimizer.optimize(num_vars=self.g_thetas.size,
+                                           objective_function=self.objective_function_generator,
+                                           initial_point=self.g_thetas.flatten())
 
-                # Update the thetas
-                self.g_thetas -= self.alpha * grad
-
-                g_total_cost += g_cost
-            g_loss.append(g_total_cost)
+            self.g_thetas, g_cost, _ = opt_param
+            self.g_thetas = self.g_thetas.reshape((self.g_layers + 1, self.num_of_dimensions))
 
             h_dist = QGAN4.calculate_hellinger_distance(self.distribution_dict, self.get_generator_distribution())
             h_dists.append(h_dist)
 
-            print(f"Epoch: {e}, G_loss: {g_total_cost:.3f}, D_loss_real: {d_real_total_cost:.3f}, D_loss_gen: {d_generated_total_cost:.3F}, Accuracy D: {n_correct / (n_incorrect + n_correct)}, Hellinger Distance: {h_dist:.3F}")
+            acc = 100*d_loss[1]
+            # print(e, acc, g_total_cost, d_loss_real, d_loss_fake, h_dist)
+            print(f"Epoch: {e}, G_loss: {g_cost:.3f}, D_loss_real: {d_loss_real[0]:.3f}, D_loss_gen: {d_loss_fake[0]:.3F}, Accuracy D: {100 * d_loss[1]}%, Hellinger Distance: {h_dist:.3F}")
 
-            if asd % 20 == 0:
-                self.plot_real_and_generated_distribution(e)
-            asd += 1
+            # if asd % 25 == 0:
+            self.plot_real_and_generated_distribution(e, plot_disc_dist=True)
+            g_loss.append(g_cost)
+            accuracies.append(acc)
+            # asd += 1
         self.plot_hellinger_distance(h_dists)
+
+        plt.plot(accuracies, label='acc')
+        plt.legend()
+        plt.show()
+
+        plt.plot(g_loss, label='g_loss')
+        plt.legend()
+        plt.show()
 
     @staticmethod
     def plot_hellinger_distance(h_dists):
@@ -317,15 +300,15 @@ class QGAN4:
         plt.xlabel("Hellinger Distance")
         plt.ylabel("Epoch")
         plt.plot(h_dists, label="Hellinger Distance")
+        plt.savefig("plots/h_dists.png")
         plt.show()
 
 
 if __name__ == '__main__':
-    qgan = QGAN4(num_of_dimensions=3, epochs=200)
+    qgan = QGAN4(num_of_dimensions=3, epochs=150)
     qgan.build_generator().draw(output='mpl').show()
-    qgan.build_discriminator([0, 1]).draw(output='mpl').show()
     # qgan.build_discriminator([1])
-    # qgan.train()
+    qgan.train()
 
     print("Optimized parameters:", qgan.d_thetas, qgan.g_thetas)
     # qgan.plot_real_and_generated_distribution()
